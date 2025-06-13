@@ -42,7 +42,7 @@ def switch_page(driver, index):
     items_li = menu_ul.find_element(By.TAG_NAME, "li")
     if index >= 2:
         return
-    
+
     target_item = items_li[index]
     target_item.click()
     pass
@@ -59,7 +59,13 @@ def open_chrome_page(url):
     return driver
 
 # login
-def login(driver, username, password):
+# 修改，若用户名为空则读取config
+def login(driver, username=None, password=None):
+    if username is None:
+        username = config.get_login_username()
+    if password is None:
+        password = config.get_login_password()
+
     username_input = get_element_by_name(driver, "username")
     password_input = get_element_by_name(driver, "password")
     buttons = get_elements_by_tag(driver, "button")
@@ -136,7 +142,7 @@ def start_IBP(driver, pname):
             button.click()
             print(f"IBP -- {pname} start!")
             break
-    
+
     time.sleep(2)
     # switch Tasklist page
     switch_page(driver, 0)

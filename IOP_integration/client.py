@@ -2,14 +2,19 @@ import sys
 sys.path.append('')
 
 from RpaTools import *
+from configLoader import config
 
-# open taskList
-url = "http://localhost:8080/tasklist"
+# config导入
+url = config.get_task_list_url()
+implicity_wait = config.get_implicit_wait_time()
+sleep_interval = config.get_sleep_interval()
+short_sleep = config.get_short_sleep()
+
 driver = open_chrome_page(url)
-driver.implicitly_wait(10)
+driver.implicitly_wait(implicity_wait)
 
-login(driver, "demo", "demo")
-driver.implicitly_wait(10)
+login(driver)
+driver.implicitly_wait(implicity_wait)
 
 need_sleep = False
 sleep_cnt = 0
@@ -17,10 +22,10 @@ loop_cnt = 0
 while True:
     if need_sleep:
         sleep_cnt = sleep_cnt + 1
-        time.sleep(60)
+        time.sleep(sleep_interval)
         print(f"sleep {sleep_cnt}!")
     else:
-        time.sleep(2)
+        time.sleep(short_sleep)
 
     need_sleep = True
     if check_work_item(driver):

@@ -1,11 +1,11 @@
 import os
 import time
 import openpyxl
+from configLoader import config
 
-# Folder path -- RPA trigger files
-TRIGGER_FOLDER_PATH = "D:\\WorkSpace\\Python\\rpa\\"
-# Excel file -- RPA && trigger file name
-RPA_FILENAME_DICT_PATH = "D:\\WorkSpace\\Python\\rpa\\rpa_filename.xlsx"
+TRIGGER_FOLDER_PATH = config.get_trigger_folder_path()
+RPA_FILENAME_DICT_PATH = config.get_rpa_filename_excel_path()
+RF_DICT = config.get_rpa_filename_mapping()
 
 # read Excel file
 def read_excel():
@@ -30,8 +30,6 @@ def create_file(filename):
 def wait_delete_file(filename):
     filename = TRIGGER_FOLDER_PATH + filename
     while os.path.exists(filename):
-        time.sleep(2)
-        print("wait RPA 2s!")
+        time.sleep(10)
+        print("wait RPA 10s!")
     print("finish waiting RPA!")
-
-RF_DICT = read_excel()

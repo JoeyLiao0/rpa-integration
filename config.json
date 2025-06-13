@@ -1,0 +1,39 @@
+{
+  "paths": {
+    "trigger_folder": "E:\\python_file\\rpa\\trigger\\"
+  },
+  "web": {
+    "task_list_url": "http://localhost:8080/tasklist",
+    "login_username": "demo",
+    "login_password": "demo"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 55332,
+    "max_connections": 5,
+    "client_host": "127.0.0.1"
+  },
+  "rpa_filename_mapping": {
+    "rpaTime": "getTIme.txt",
+    "RPA_Task2": "task2_trigger.txt",
+    "RPA_Task3": "task3_trigger.txt"
+  },
+  "superman_items": {
+    "Approve application": "Bank_IBP"
+  },
+  "ui": {
+    "api_url": "",
+    "username": "",
+    "api_key": ""
+  },
+  "selenium": {
+    "implicit_wait_time": 10,
+    "explicit_wait_time": 20,
+    "poll_frequency": 0.5
+  },
+  "timing": {
+    "sleep_interval": 60,
+    "short_sleep": 2,
+    "rpa_check_interval": 2
+  }
+}

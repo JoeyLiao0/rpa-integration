@@ -56,9 +56,9 @@ class CenterServer:
                 time.sleep(60)
             else:
                 time.sleep(2)
-            
+
             need_sleep = True
-            if validate_work_item(self.driver, self.work_items, self.superman_item):
+            if validate_work_item(self.driver, self.work_items, self.superman_items):
                 print(f"have work item -- {self.work_items}")
 
                 # ui control lock
@@ -73,10 +73,10 @@ class CenterServer:
 
                             rpa_data = get_work_item_data_superman(self.driver, key)
                             print(f"get RPA data -- {key} -- data: {rpa_data}")
-                            
+
                             self.send_work_item(rpa_data)
                             self.work_items[key] = (span, 1)
-                    
+
                 need_sleep = False
             else:
                 print("no work item")
@@ -86,7 +86,7 @@ class CenterServer:
         if username in self.clients:
             json_data = json.dumps(data)
             self.clients[username].sendall(json_data.encode("utf-8"))
-            print(f"Sent task {data["taskName"]} to {username}")
+            print(f"Sent task {data['taskName']} to {username}")
         else:
             print("User RPA is not exist!")
 
@@ -114,10 +114,10 @@ class CenterServer:
                 break
 
     def click_complete_button(self, data):
-        key = f"RPA_{data["userName"]}_{data["taskName"]}"
+        key = f"RPA_{data['userName']}_{data['taskName']}"
         if key not in self.work_items:
             return
-        
+
         # ui control lock
         with self.web_lock:
             work_item_tuple = self.work_items[key]
@@ -126,9 +126,10 @@ class CenterServer:
             time.sleep(1)
 
             finish_work_item(self.driver)
-        
+
         print(f"Finish work item -- {key}")
         del self.work_items[key]
+
 
 if __name__ == "__main__":
     server = CenterServer()

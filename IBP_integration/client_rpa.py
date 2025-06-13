@@ -1,18 +1,21 @@
 import sys
+
 sys.path.append('')
 
 import socket
 import threading
 import json
 from RpaTools import *
+from configLoader import config
+
 
 class RpaClient:
-    def __init__(self, username, server_host="127.0.0.1", server_port=55332):
-        self.server_host = server_host
-        self.server_port = server_port
+    def __init__(self, username, server_host=None, server_port=None):
+        self.server_host = server_host or config.get_client_host()
+        self.server_port = server_port or config.get_server_port()
         self.username = username
         self.socket = None
-    
+
     def start_client(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self.server_host, self.server_port))
@@ -35,12 +38,12 @@ class RpaClient:
             except Exception as e:
                 print(f"Error receiving tasks: {e}")
                 break
-    
+
     def rpa_process_task(self, data):
         username = data["userName"]
         if username != self.username:
             return
-        
+
         trigger_rpa(data)
         self.finish_rpa_task(data)
 
