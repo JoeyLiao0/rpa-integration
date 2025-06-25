@@ -9,17 +9,15 @@ from RpaTools import *
 
 class CenterServer:
     MAX_NETWORK_CONNECTIONS = 5
-    URL = "http://localhost:8080/tasklist"
 
     def __init__(self, host="0.0.0.0", port=55332):
         self.host = host
         self.port = port
         self.clients = {}
         self.work_items = {}
-        self.superman_items = {"Approve application": "Bank_IBP"}
+        self.superman_items = config.get_superman_items() # get from config
         self.web_thread = None
         self.web_lock = threading.Lock()
-        self.driver = None
 
     # start server
     def start_server(self):
@@ -44,11 +42,10 @@ class CenterServer:
     # web control thread
     def web_control(self):
         print(f"Web control thread start!")
-        self.driver = open_chrome_page(self.URL)
-        self.driver.implicitly_wait(10)
 
-        login(self.driver, "demo", "demo")
-        self.driver.implicitly_wait(10)
+        if not init_bpm_client():
+            print("Failed to authenticate with BPM platform")
+            return
 
         need_sleep = False
         while True:
@@ -58,7 +55,7 @@ class CenterServer:
                 time.sleep(2)
 
             need_sleep = True
-            if validate_work_item(self.driver, self.work_items, self.superman_items):
+            if validate_work_item(self.work_items, self.superman_items):
                 print(f"have work item -- {self.work_items}")
 
                 # ui control lock
@@ -66,16 +63,16 @@ class CenterServer:
                     for key in self.work_items:
                         work_item_tuple = self.work_items[key]
                         if work_item_tuple[1] == 0:
-                            span = work_item_tuple[0]
-                            span.click()
-                            print(f"click work item -- {key}")
+                            task_id = work_item_tuple[0]
+                            print(f"processing work item -- {key}")
                             time.sleep(1)
 
-                            rpa_data = get_work_item_data_superman(self.driver, key)
+                            rpa_data = get_work_item_data_superman(key)
+                            rpa_data["taskId"] = task_id
                             print(f"get RPA data -- {key} -- data: {rpa_data}")
 
                             self.send_work_item(rpa_data)
-                            self.work_items[key] = (span, 1)
+                            self.work_items[key] = (task_id, 1)
 
                 need_sleep = False
             else:
@@ -121,11 +118,9 @@ class CenterServer:
         # ui control lock
         with self.web_lock:
             work_item_tuple = self.work_items[key]
-            span = work_item_tuple[0]
-            span.click()
-            time.sleep(1)
+            task_id = work_item_tuple[0]
 
-            finish_work_item(self.driver)
+            complete_task_by_id(task_id)
 
         print(f"Finish work item -- {key}")
         del self.work_items[key]

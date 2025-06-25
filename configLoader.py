@@ -98,18 +98,17 @@ class ConfigLoader:
 
     # === UI配置 ===
     def get_api_url(self) -> str:
-        """获取API URL"""
-        return self.get('ui.api_url', '')
+        return self.get('api.base_url', self.get('ui.api_url', ''))
 
     def get_username(self) -> str:
-        """获取用户名"""
-        return self.get('ui.username', '')
+        return self.get('api.username', self.get('ui.username', ''))
 
     def get_api_key(self) -> str:
-        """获取API密钥"""
-        return self.get('ui.api_key', '')
+        return self.get('api.password', self.get('ui.api_key', ''))
 
-    # === Selenium配置 ===
+    def get_api_platform(self) -> str:
+        return self.get('api.platform', 'camunda7')
+
     def get_implicit_wait_time(self) -> int:
         """获取隐式等待时间"""
         return self.get('selenium.implicit_wait_time', 10)

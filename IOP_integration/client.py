@@ -5,16 +5,12 @@ from RpaTools import *
 from configLoader import config
 
 # config导入
-url = config.get_task_list_url()
-implicity_wait = config.get_implicit_wait_time()
 sleep_interval = config.get_sleep_interval()
 short_sleep = config.get_short_sleep()
 
-driver = open_chrome_page(url)
-driver.implicitly_wait(implicity_wait)
-
-login(driver)
-driver.implicitly_wait(implicity_wait)
+if not init_bpm_client():
+    print("Failed to authenticate with BPM platform")
+    sys.exit(1)
 
 need_sleep = False
 sleep_cnt = 0
@@ -28,15 +24,15 @@ while True:
         time.sleep(short_sleep)
 
     need_sleep = True
-    if check_work_item(driver):
+    if check_work_item():
         print("have work item")
         time.sleep(1)
 
-        click_work_item(driver)
+        click_work_item()
         print("click work item")
         time.sleep(1)
 
-        rpa_data = get_work_item_data(driver)
+        rpa_data = get_work_item_data()
         print("get RPA data")
         time.sleep(1)
 
@@ -44,7 +40,7 @@ while True:
         print("RPA process finish")
         time.sleep(1)
 
-        finish_work_item(driver)
+        finish_work_item(rpa_data)
         print("finish work item")
         time.sleep(1)
         need_sleep = False

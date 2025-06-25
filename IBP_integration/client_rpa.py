@@ -11,17 +11,46 @@ from configLoader import config
 
 class RpaClient:
     def __init__(self, username, server_host=None, server_port=None):
-        self.server_host = server_host or config.get_client_host()
+        self.server_host = server_host or config.get_server_host()
         self.server_port = server_port or config.get_server_port()
         self.username = username
         self.socket = None
+        self.running = True
 
     def start_client(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((self.server_host, self.server_port))
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.server_host, self.server_port))
+            print(f"连接到服务器 {self.server_host}:{self.server_port}")
 
-        self.socket.sendall(self.username.encode())
-        threading.Thread(target=self.receive_tasks).start()
+            # 发送用户名
+            self.socket.sendall(self.username.encode())
+            print(f"已注册用户: {self.username}")
+
+            # 启动接收任务线程
+            receive_thread = threading.Thread(target=self.receive_tasks)
+            receive_thread.daemon = True
+            receive_thread.start()
+
+            # 保持主线程运行
+            try:
+                while self.running:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("收到中断信号，正在关闭客户端...")
+                self.stop_client()
+
+        except Exception as e:
+            print(f"启动客户端失败: {e}")
+
+    def stop_client(self):
+        self.running = False
+        if self.socket:
+            try:
+                self.socket.close()
+            except:
+                pass
+        print("客户端已关闭")
 
     def receive_tasks(self):
         while True:
@@ -40,18 +69,22 @@ class RpaClient:
                 break
 
     def rpa_process_task(self, data):
-        username = data["userName"]
-        if username != self.username:
-            return
+            username = data.get("userName", "")
+            task_name = data.get("taskName", "")
 
-        trigger_rpa(data)
-        self.finish_rpa_task(data)
+            if username != self.username:
+                return
+
+            print(f"开始处理RPA任务: {task_name}")
+            trigger_rpa(data)
+            self.finish_rpa_task(data)
 
     def finish_rpa_task(self, data):
         data["state"] = "completed"
         json_data = json.dumps(data)
         self.socket.sendall(json_data.encode("utf-8"))
         print("Reponse server: task completed!")
+
 
 if __name__ == "__main__":
     client = RpaClient("user1")

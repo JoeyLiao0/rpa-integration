@@ -22,9 +22,15 @@
     "Approve application": "Bank_IBP"
   },
   "ui": {
-    "api_url": "",
-    "username": "",
-    "api_key": ""
+    "api_url": "http://localhost:8080",
+    "username": "demo",
+    "api_key": "demo"
+  },
+  "api": {
+    "platform": "camunda7",
+    "base_url": "http://localhost:8080",
+    "username": "demo",
+    "password": "demo"
   },
   "selenium": {
     "implicit_wait_time": 10,
