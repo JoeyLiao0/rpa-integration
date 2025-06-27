@@ -403,7 +403,8 @@ class RPAIntegrationUI:
         ], spacing=0, expand=True)
 
         # 日志输出区域
-        self.log_output = ft.Column([], scroll=ft.ScrollMode.AUTO, spacing=2)
+        if(self.log_output == None):
+            self.log_output = ft.Column([], scroll=ft.ScrollMode.AUTO, spacing=2)
         log_container = ft.Container(
             content=self.log_output,
             bgcolor=ft.colors.GREY_50,
@@ -456,40 +457,29 @@ class RPAIntegrationUI:
     def create_history_log_view(self):
         """创建历史日志视图"""
 
-        # 日志级别筛选控件
-        self.log_level_dropdown = ft.Dropdown(
-            width=150,
-            height=40,
-            value="ALL",
-            options=[
-                ft.dropdown.Option("ALL", text="全部日志"),
-                ft.dropdown.Option("INFO", text="信息"),
-                ft.dropdown.Option("SUCCESS", text="成功"),
-                ft.dropdown.Option("WARNING", text="警告"),
-                ft.dropdown.Option("ERROR", text="错误"),
-            ],
-            text_size=12,
-            border_color=ft.colors.WHITE,
-            focused_border_color=ft.colors.WHITE,  # 聚焦时保持相同颜色
-            border_radius=4,
-            content_padding=10,
-            bgcolor=ft.colors.GREY_50,
-            filled=True,  # 启用填充背景色
-            color=ft.colors.BLACK,  # 文字颜色
-            on_change=lambda e: self.filter_history_log(e.control.value),
-        )
-
-        # 新增日期筛选控件
-        self.date_picker_start = ft.DatePicker(
-            first_date=datetime(2020, 1, 1),
-            last_date=datetime.now(),
-            on_change=lambda e: self._update_date_filter()
-        )
-        self.date_picker_end = ft.DatePicker(
-            first_date=datetime(2020, 1, 1),
-            last_date=datetime.now(),
-            on_change=lambda e: self._update_date_filter()
-        )
+        if(self.log_level_dropdown == None):
+            # 日志级别筛选控件
+            self.log_level_dropdown = ft.Dropdown(
+                width=150,
+                height=40,
+                value="ALL",
+                options=[
+                    ft.dropdown.Option("ALL", text="全部日志"),
+                    ft.dropdown.Option("INFO", text="信息"),
+                    ft.dropdown.Option("SUCCESS", text="成功"),
+                    ft.dropdown.Option("WARNING", text="警告"),
+                    ft.dropdown.Option("ERROR", text="错误"),
+                ],
+                text_size=12,
+                border_color=ft.colors.WHITE,
+                focused_border_color=ft.colors.WHITE,  # 聚焦时保持相同颜色
+                border_radius=4,
+                content_padding=10,
+                bgcolor=ft.colors.GREY_50,
+                filled=True,  # 启用填充背景色
+                color=ft.colors.BLACK,  # 文字颜色
+                on_change=lambda e: self.filter_history_log(e.control.value),
+            )
 
         # 历史日志按钮区域
         history_controls = ft.Column([
@@ -561,7 +551,8 @@ class RPAIntegrationUI:
         ], spacing=0)
 
         # 历史日志显示区域
-        self.history_log_output = ft.Column([], scroll=ft.ScrollMode.AUTO, spacing=2)
+        if(self.history_log_output == None):
+            self.history_log_output = ft.Column([], scroll=ft.ScrollMode.AUTO, spacing=2)
         history_log_container = ft.Container(
             content=self.history_log_output,
             bgcolor=ft.colors.GREY_50,
