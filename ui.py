@@ -11,10 +11,16 @@ class RPAIntegrationUI:
     def __init__(self):
         self.config_path = "config.json"
         self.current_process = None
-        self.current_script = None
+        self.current_script = None  # 直接利用这个变量判断日志类型
         self.page = None
         self.log_output = None
+        self.history_log_output = None
         self.config_data = self.load_config()
+        self.log_dir = os.path.join(os.path.dirname(self.config_path), "logs")
+        self.history_log_type = None  # 当前查看的历史日志类型
+        self.log_level_filter = "ALL"
+        self.log_level_dropdown = None
+        os.makedirs(self.log_dir, exist_ok=True)
 
     def load_config(self):
         """加载配置文件"""
@@ -36,10 +42,31 @@ class RPAIntegrationUI:
         except Exception as e:
             self.log_message(f"配置保存失败: {e}", "error")
 
+    def get_log_file_path(self):
+        """根据当前脚本类型获取日志文件路径"""
+        if not self.current_script:
+            return os.path.join(self.log_dir, "system.log")
+        
+        # 从脚本路径提取类型
+        if "IOP_integration/client.py" in self.current_script:
+            log_type = "iop_client"
+        elif "IBP_integration/client_rpa.py" in self.current_script:
+            log_type = "ibp_client"
+        elif "IBP_integration/service_user.py" in self.current_script:
+            log_type = "ibp_service"
+        else:
+            log_type = "system"
+            
+        return os.path.join(self.log_dir, f"{log_type}.log")
+
+
     def log_message(self, message, msg_type="info"):
-        """添加日志消息"""
+        """添加日志消息（自动根据当前脚本选择日志文件）"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_text = f"[{timestamp}] [{msg_type.upper()}] {message}"
+        
+        # 1. 输出到UI界面
         if self.log_output:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             color = {
                 "info": ft.colors.BLUE,
                 "success": ft.colors.GREEN,
@@ -47,15 +74,20 @@ class RPAIntegrationUI:
                 "warning": ft.colors.ORANGE
             }.get(msg_type, ft.colors.BLACK)
 
-            log_entry = ft.Text(
-                f"[{timestamp}] {message}",
-                color=color,
-                size=12
-            )
+            log_entry = ft.Text(log_text, color=color, size=12)
             self.log_output.controls.append(log_entry)
-            if len(self.log_output.controls) > 100:  # 限制日志数量
+            if len(self.log_output.controls) > 100:
                 self.log_output.controls.pop(0)
             self.log_output.scroll_to(offset=-1)
+        
+        # 2. 持久化到日志文件
+        try:
+            with open(self.get_log_file_path(), 'a', encoding='utf-8') as f:
+                f.write(log_text + '\n')
+        except Exception as e:
+            print(f"⚠️ 日志写入失败: {e}")
+        
+        if self.page:
             self.page.update()
 
     def create_config_form(self):
@@ -222,6 +254,7 @@ class RPAIntegrationUI:
             return
 
         try:
+            self.clear_log()
             self.current_script = script_name
             self.log_message(f"开始运行脚本: {script_name}", "info")
 
@@ -399,6 +432,240 @@ class RPAIntegrationUI:
             )
         ], expand=True)
 
+    def _reset_log_filter(self):
+        """原子化重置筛选条件"""
+        self.log_level_filter = "ALL"
+        if hasattr(self, 'log_level_dropdown'):
+            self.log_level_dropdown.value = "ALL"
+            self.log_level_dropdown.update()
+        self.page.update()
+
+    def _update_date_filter(self, e):
+        """更新选择的日期"""
+        self.selected_date = e.control.value
+        self.load_history_log(self.history_log_type)
+
+    def _clear_date_filter(self):
+        """清除日期筛选"""
+        self.selected_date = None
+        self.date_picker.value = None
+        self.load_history_log(self.history_log_type)
+
+
+
+    def create_history_log_view(self):
+        """创建历史日志视图"""
+
+        # 日志级别筛选控件
+        self.log_level_dropdown = ft.Dropdown(
+            width=150,
+            height=40,
+            value="ALL",
+            options=[
+                ft.dropdown.Option("ALL", text="全部日志"),
+                ft.dropdown.Option("INFO", text="信息"),
+                ft.dropdown.Option("SUCCESS", text="成功"),
+                ft.dropdown.Option("WARNING", text="警告"),
+                ft.dropdown.Option("ERROR", text="错误"),
+            ],
+            text_size=12,
+            border_color=ft.colors.WHITE,
+            focused_border_color=ft.colors.WHITE,  # 聚焦时保持相同颜色
+            border_radius=4,
+            content_padding=10,
+            bgcolor=ft.colors.GREY_50,
+            filled=True,  # 启用填充背景色
+            color=ft.colors.BLACK,  # 文字颜色
+            on_change=lambda e: self.filter_history_log(e.control.value),
+        )
+
+        # 新增日期筛选控件
+        self.date_picker_start = ft.DatePicker(
+            first_date=datetime(2020, 1, 1),
+            last_date=datetime.now(),
+            on_change=lambda e: self._update_date_filter()
+        )
+        self.date_picker_end = ft.DatePicker(
+            first_date=datetime(2020, 1, 1),
+            last_date=datetime.now(),
+            on_change=lambda e: self._update_date_filter()
+        )
+
+        # 历史日志按钮区域
+        history_controls = ft.Column([
+            ft.Text("历史日志", size=16, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700),
+            ft.Container(height=15),
+            ft.ElevatedButton(
+                "查看系统日志",
+                icon=ft.icons.HISTORY,
+                height=45,
+                width=180,
+                on_click=lambda e: [
+                    self._reset_log_filter(),
+                    self.load_history_log("system"),
+                ],
+                style=ft.ButtonStyle(
+                    color=ft.colors.WHITE,
+                    bgcolor=ft.colors.BLUE_400,
+                    text_style=ft.TextStyle(size=14)
+                )
+            ),
+            ft.Container(height=12),
+            ft.ElevatedButton(
+                "查看IOP Client日志",
+                icon=ft.icons.HISTORY,
+                height=45,
+                width=180,
+                on_click=lambda e: [
+                    self._reset_log_filter(),
+                    self.load_history_log("iop_client"),
+                ],
+                style=ft.ButtonStyle(
+                    color=ft.colors.WHITE,
+                    bgcolor=ft.colors.BLUE_400,
+                    text_style=ft.TextStyle(size=14)
+                )
+            ),
+            ft.Container(height=12),
+            ft.ElevatedButton(
+                "查看IBP Client日志",
+                icon=ft.icons.HISTORY,
+                height=45,
+                width=180,
+                on_click=lambda e: [
+                    self._reset_log_filter(),
+                    self.load_history_log("ibp_client"),
+                ],
+                style=ft.ButtonStyle(
+                    color=ft.colors.WHITE,
+                    bgcolor=ft.colors.BLUE_400,
+                    text_style=ft.TextStyle(size=14)
+                )
+            ),
+            ft.Container(height=12),
+            ft.ElevatedButton(
+                "查看IBP Service日志",
+                icon=ft.icons.HISTORY,
+                height=45,
+                width=180,
+                on_click=lambda e: [
+                    self._reset_log_filter(),
+                    self.load_history_log("ibp_service"),
+                ],
+                style=ft.ButtonStyle(
+                    color=ft.colors.WHITE,
+                    bgcolor=ft.colors.BLUE_400,
+                    text_style=ft.TextStyle(size=14)
+                )
+            )
+        ], spacing=0)
+
+        # 历史日志显示区域
+        self.history_log_output = ft.Column([], scroll=ft.ScrollMode.AUTO, spacing=2)
+        history_log_container = ft.Container(
+            content=self.history_log_output,
+            bgcolor=ft.colors.GREY_50,
+            border=ft.border.all(1, ft.colors.GREY_400),
+            border_radius=5,
+            padding=10,
+            width=900, # None为自适应
+            height=600,  # 固定高度
+        )
+
+        title_row = ft.Row([
+            ft.Text("历史日志", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE),
+            ft.Container(expand=True),  # 占位空间
+            ft.Row([
+                ft.Text("筛选:", size=14),
+                self.log_level_dropdown
+            ], spacing=10)
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
+        return ft.Row([
+            ft.Container(
+                content=history_controls,
+                width=220,
+                padding=ft.padding.all(15),
+                height=700
+            ),
+            ft.VerticalDivider(width=1),
+            ft.Container(
+                content=ft.Column([
+                    title_row,
+                    history_log_container
+                ], spacing=10),
+                expand=True,
+                padding=10
+            )
+        ], expand=True)
+
+    def filter_history_log(self, level):
+        """确保筛选条件同步到属性和控件"""
+        self.log_level_filter = level
+        if hasattr(self, 'log_level_dropdown'):
+            self.log_level_dropdown.value = level
+        self.load_history_log(self.history_log_type)
+
+
+    def load_history_log(self, log_type):
+        """从文件加载历史日志"""
+        self.history_log_type = log_type
+        log_file = os.path.join(self.log_dir, f"{log_type}.log")
+        
+        # 确保历史日志输出区域已初始化
+        if not self.history_log_output:
+            return
+        
+        # 清空现有日志
+        self.history_log_output.controls.clear()
+        
+        # 检查文件是否存在
+        if not os.path.exists(log_file):
+            self.history_log_output.controls.append(
+                ft.Text(f"-------------------空-------------------", color=ft.colors.BLUE, size=12)
+            )
+            self.page.update()
+            return
+
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            # 如果文件存在但为空
+            if not lines:
+                self.history_log_output.controls.append(
+                    ft.Text("-------------------空-------------------", color=ft.colors.BLUE, size=12)
+                )
+            else:
+                for line in lines:
+                    # 根据筛选条件显示日志
+                    if self.log_level_filter == "ALL" or f"[{self.log_level_filter}]" in line:
+                        # 根据日志级别自动着色
+                        if "[ERROR]" in line:
+                            color = ft.colors.RED
+                        elif "[WARNING]" in line:
+                            color = ft.colors.ORANGE
+                        elif "[SUCCESS]" in line:
+                            color = ft.colors.GREEN
+                        elif "[INFO]" in line:
+                            color = ft.colors.BLUE
+                        else:
+                            color = ft.colors.BLACK
+                        
+                        self.history_log_output.controls.append(
+                            ft.Text(line.strip(), color=color, size=12)
+                        )
+            
+            self.history_log_output.scroll_to(offset=-1)
+        
+        except Exception as e:
+            self.history_log_output.controls.append(
+                ft.Text(f"加载日志失败: {e}", color=ft.colors.RED)
+            )
+
+        self.page.update()
+
+
     def main(self, page: ft.Page):
         self.page = page
         page.title = "RPA Integation"
@@ -443,6 +710,18 @@ class RPAIntegrationUI:
             on_click=lambda e: nav_click(run_nav, self.create_run_view())
         )
 
+        # 在导航栏中添加历史日志按钮
+        history_nav = ft.Container(
+            content=ft.Row([
+                ft.Icon(ft.icons.HISTORY, color=ft.colors.BLUE_600),
+                ft.Text("历史日志", size=16, color=ft.colors.BLUE_600)
+            ], spacing=10),
+            padding=ft.padding.symmetric(horizontal=15, vertical=12),
+            border_radius=8,
+            bgcolor=ft.colors.TRANSPARENT,
+            on_click=lambda e: nav_click(history_nav, self.create_history_log_view())
+        )
+
         nav_rail = ft.Column([
             ft.Container(
                 content=ft.Text("RPA-integration", size=20, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700),
@@ -450,8 +729,10 @@ class RPAIntegrationUI:
             ),
             ft.Divider(height=1, color=ft.colors.GREY_300),
             config_nav,
-            run_nav
+            run_nav,
+            history_nav
         ], spacing=5)
+
 
         # 内容区域
         content_area = ft.Container(
