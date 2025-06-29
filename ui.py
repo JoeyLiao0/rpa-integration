@@ -20,6 +20,8 @@ class RPAIntegrationUI:
         self.history_log_type = None  # 当前查看的历史日志类型
         self.log_level_filter = "ALL"
         self.log_level_dropdown = None
+        # 用于跟踪键值对容器的引用
+        self.keyvalue_containers = {}
         os.makedirs(self.log_dir, exist_ok=True)
 
     def load_config(self):
@@ -39,14 +41,31 @@ class RPAIntegrationUI:
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(self.config_data, f, indent=2, ensure_ascii=False)
             self.log_message("配置保存成功！", "success")
+            # 显示保存成功的提示
+            if self.page:
+                self.show_snack_bar("配置保存成功！", ft.colors.GREEN)
         except Exception as e:
-            self.log_message(f"配置保存失败: {e}", "error")
+            error_msg = f"配置保存失败: {e}"
+            self.log_message(error_msg, "error")
+            if self.page:
+                self.show_snack_bar(error_msg, ft.colors.RED)
+
+    def show_snack_bar(self, message, color):
+        """显示提示消息"""
+        snack_bar = ft.SnackBar(
+            content=ft.Text(message, color=ft.colors.WHITE),
+            bgcolor=color,
+            duration=3000,
+        )
+        self.page.overlay.append(snack_bar)
+        snack_bar.open = True
+        self.page.update()
 
     def get_log_file_path(self):
         """根据当前脚本类型获取日志文件路径"""
         if not self.current_script:
             return os.path.join(self.log_dir, "system.log")
-        
+
         # 从脚本路径提取类型
         if "IOP_integration/client.py" in self.current_script:
             log_type = "iop_client"
@@ -56,15 +75,14 @@ class RPAIntegrationUI:
             log_type = "ibp_service"
         else:
             log_type = "system"
-            
-        return os.path.join(self.log_dir, f"{log_type}.log")
 
+        return os.path.join(self.log_dir, f"{log_type}.log")
 
     def log_message(self, message, msg_type="info"):
         """添加日志消息（自动根据当前脚本选择日志文件）"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_text = f"[{timestamp}] [{msg_type.upper()}] {message}"
-        
+
         # 1. 输出到UI界面
         if self.log_output:
             color = {
@@ -79,14 +97,14 @@ class RPAIntegrationUI:
             if len(self.log_output.controls) > 100:
                 self.log_output.controls.pop(0)
             self.log_output.scroll_to(offset=-1)
-        
+
         # 2. 持久化到日志文件
         try:
             with open(self.get_log_file_path(), 'a', encoding='utf-8') as f:
                 f.write(log_text + '\n')
         except Exception as e:
-            print(f"⚠️ 日志写入失败: {e}")
-        
+            print(f"日志写入失败: {e}")
+
         if self.page:
             self.page.update()
 
@@ -94,37 +112,7 @@ class RPAIntegrationUI:
         """创建配置表单"""
         config_fields = []
 
-        # 路径配置
-        config_fields.append(ft.Text("路径配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
-        config_fields.append(ft.TextField(
-            label="触发文件夹路径",
-            value=self.config_data["paths"]["trigger_folder"],
-            on_change=lambda e: self.update_config_value("paths.trigger_folder", e.control.value)
-        ))
-
-        # Web配置
-        config_fields.append(ft.Divider(height=20))
-        config_fields.append(ft.Text("Web配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
-        config_fields.append(ft.TextField(
-            label="任务列表URL",
-            value=self.config_data["web"]["task_list_url"],
-            on_change=lambda e: self.update_config_value("web.task_list_url", e.control.value)
-        ))
-        config_fields.append(ft.TextField(
-            label="登录用户名",
-            value=self.config_data["web"]["login_username"],
-            on_change=lambda e: self.update_config_value("web.login_username", e.control.value)
-        ))
-        config_fields.append(ft.TextField(
-            label="登录密码",
-            value=self.config_data["web"]["login_password"],
-            password=True,
-            can_reveal_password=True, # 密文与可视按钮
-            on_change=lambda e: self.update_config_value("web.login_password", e.control.value)
-        ))
-
         # 服务器配置
-        config_fields.append(ft.Divider(height=20))
         config_fields.append(ft.Text("服务器配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
         config_fields.append(ft.TextField(
             label="服务器主机",
@@ -149,48 +137,57 @@ class RPAIntegrationUI:
             on_change=lambda e: self.update_config_value("server.client_host", e.control.value)
         ))
 
-        # UI配置
+        # Superman Items配置 - 动态键值对
         config_fields.append(ft.Divider(height=20))
-        config_fields.append(ft.Text("UI配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
+        config_fields.append(ft.Text("Superman Items配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
+        superman_items_section = self.create_keyvalue_section("superman_items", "Superman Items")
+        config_fields.append(superman_items_section)
+
+        # Camunda8配置
+        config_fields.append(ft.Divider(height=20))
+        config_fields.append(ft.Text("Camunda8配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
         config_fields.append(ft.TextField(
-            label="API URL",
-            value=self.config_data["ui"]["api_url"],
-            on_change=lambda e: self.update_config_value("ui.api_url", e.control.value)
+            label="BASE URL",
+            value=self.config_data["camunda8"]["base_url"],
+            on_change=lambda e: self.update_config_value("camunda8.base_url", e.control.value)
         ))
         config_fields.append(ft.TextField(
             label="用户名",
-            value=self.config_data["ui"]["username"],
-            on_change=lambda e: self.update_config_value("ui.username", e.control.value)
+            value=self.config_data["camunda8"]["username"],
+            on_change=lambda e: self.update_config_value("camunda8.username", e.control.value)
         ))
         config_fields.append(ft.TextField(
-            label="API密钥",
-            value=self.config_data["ui"]["api_key"],
+            label="密码",
+            value=self.config_data["camunda8"]["password"],
             password=True,
             can_reveal_password=True,
-            on_change=lambda e: self.update_config_value("ui.api_key", e.control.value)
+            on_change=lambda e: self.update_config_value("camunda8.api_key", e.control.value)
         ))
 
-        # Selenium配置
+        # Camunda7配置
         config_fields.append(ft.Divider(height=20))
-        config_fields.append(ft.Text("Selenium配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
+        config_fields.append(ft.Text("Camunda7配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
         config_fields.append(ft.TextField(
-            label="隐式等待时间(秒)",
-            value=str(self.config_data["selenium"]["implicit_wait_time"]),
-            on_change=lambda e: self.update_config_value("selenium.implicit_wait_time",
-                                                         int(e.control.value) if e.control.value.isdigit() else 10)
+            label="平台",
+            value=self.config_data["camunda7"]["platform"],
+            on_change=lambda e: self.update_config_value("camunda7.platform", e.control.value)
         ))
         config_fields.append(ft.TextField(
-            label="显式等待时间(秒)",
-            value=str(self.config_data["selenium"]["explicit_wait_time"]),
-            on_change=lambda e: self.update_config_value("selenium.explicit_wait_time",
-                                                         int(e.control.value) if e.control.value.isdigit() else 20)
+            label="Base URL",
+            value=self.config_data["camunda7"]["base_url"],
+            on_change=lambda e: self.update_config_value("camunda7.base_url", e.control.value)
         ))
         config_fields.append(ft.TextField(
-            label="轮询频率(秒)",
-            value=str(self.config_data["selenium"]["poll_frequency"]),
-            on_change=lambda e: self.update_config_value("selenium.poll_frequency",
-                                                         float(e.control.value) if e.control.value.replace('.',
-                                                                                                           '').isdigit() else 0.5)
+            label="用户名",
+            value=self.config_data["camunda7"]["username"],
+            on_change=lambda e: self.update_config_value("camunda7.username", e.control.value)
+        ))
+        config_fields.append(ft.TextField(
+            label="密码",
+            value=self.config_data["camunda7"]["password"],
+            password=True,
+            can_reveal_password=True,
+            on_change=lambda e: self.update_config_value("camunda7.password", e.control.value)
         ))
 
         # 时间配置
@@ -215,6 +212,61 @@ class RPAIntegrationUI:
                                                          int(e.control.value) if e.control.value.isdigit() else 2)
         ))
 
+        # UiPath配置
+        config_fields.append(ft.Divider(height=20))
+        config_fields.append(ft.Text("UiPath配置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
+        config_fields.append(ft.TextField(
+            label="组织",
+            value=self.config_data["uipath"]["organization"],
+            on_change=lambda e: self.update_config_value("uipath.organization", e.control.value)
+        ))
+        config_fields.append(ft.TextField(
+            label="租户",
+            value=self.config_data["uipath"]["tenant"],
+            on_change=lambda e: self.update_config_value("uipath.tenant", e.control.value)
+        ))
+        config_fields.append(ft.TextField(
+            label="Personal Access Token",
+            value=self.config_data["uipath"]["pat"],
+            password=True,
+            can_reveal_password=True,
+            on_change=lambda e: self.update_config_value("uipath.pat", e.control.value)
+        ))
+        config_fields.append(ft.TextField(
+            label="文件夹ID",
+            value=str(self.config_data["uipath"]["folder_id"]),
+            on_change=lambda e: self.update_config_value("uipath.folder_id",
+                                                         int(e.control.value) if e.control.value.isdigit() else 0)
+        ))
+        config_fields.append(ft.TextField(
+            label="机器人ID",
+            value=str(self.config_data["uipath"]["robot_id"]),
+            on_change=lambda e: self.update_config_value("uipath.robot_id",
+                                                         int(e.control.value) if e.control.value.isdigit() else 0)
+        ))
+
+        # UiPath设置配置
+        config_fields.append(ft.Divider(height=20))
+        config_fields.append(ft.Text("UiPath设置", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
+        config_fields.append(ft.TextField(
+            label="轮询间隔(秒)",
+            value=str(self.config_data["uipath_settings"]["poll_interval"]),
+            on_change=lambda e: self.update_config_value("uipath_settings.poll_interval",
+                                                         int(e.control.value) if e.control.value.isdigit() else 5)
+        ))
+        config_fields.append(ft.TextField(
+            label="最大尝试次数",
+            value=str(self.config_data["uipath_settings"]["max_attempts"]),
+            on_change=lambda e: self.update_config_value("uipath_settings.max_attempts",
+                                                         int(e.control.value) if e.control.value.isdigit() else 60)
+        ))
+
+        # RPA文件名映射配置 - 动态键值对
+        config_fields.append(ft.Divider(height=20))
+        config_fields.append(ft.Text("RPA文件名映射", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE))
+        rpa_mapping_section = self.create_keyvalue_section("rpa_filename_mapping", "RPA文件名映射")
+        config_fields.append(rpa_mapping_section)
+
         # 保存按钮
         config_fields.append(ft.Divider(height=30))
         config_fields.append(ft.ElevatedButton(
@@ -232,6 +284,130 @@ class RPAIntegrationUI:
             scroll=ft.ScrollMode.AUTO,
             spacing=10
         )
+
+    def create_keyvalue_section(self, config_key, section_name):
+        """创建动态键值对配置区域"""
+        # 获取当前配置数据
+        current_data = self.config_data.get(config_key, {})
+
+        # 创建键值对行的列表
+        keyvalue_rows = []
+
+        # 为现有的键值对创建编辑行
+        for key, value in current_data.items():
+            row = self.create_keyvalue_row(config_key, key, str(value))
+            keyvalue_rows.append(row)
+
+        # 创建包含所有键值对行的容器
+        keyvalue_container = ft.Column(
+            controls=keyvalue_rows,
+            spacing=5
+        )
+
+        # 保存容器引用用于后续操作
+        self.keyvalue_containers[config_key] = keyvalue_container
+
+        # 添加新键值对按钮
+        add_button = ft.ElevatedButton(
+            f"添加新的{section_name}项",
+            icon=ft.icons.ADD,
+            on_click=lambda e: self.add_keyvalue_pair(config_key),
+            style=ft.ButtonStyle(
+                color=ft.colors.WHITE,
+                bgcolor=ft.colors.GREEN_400,
+                text_style=ft.TextStyle(size=12)
+            )
+        )
+
+        return ft.Column([
+            keyvalue_container,
+            ft.Container(height=10),
+            add_button
+        ], spacing=0)
+
+    def create_keyvalue_row(self, config_key, key="", value=""):
+        """创建单个键值对编辑行"""
+        original_key = key  # 保存原始键值用于后续操作
+
+        key_field = ft.TextField(
+            label="键",
+            value=key,
+            width=200,
+            height=50,
+            on_blur=lambda e: self.update_keyvalue_on_blur(config_key, original_key, e.control.value, value_field.value)
+        )
+
+        value_field = ft.TextField(
+            label="值",
+            value=value,
+            width=300,
+            height=50,
+            on_blur=lambda e: self.update_keyvalue_on_blur(config_key, original_key, key_field.value, e.control.value)
+        )
+
+        delete_button = ft.IconButton(
+            icon=ft.icons.DELETE,
+            icon_color=ft.colors.RED,
+            tooltip="删除此项",
+            on_click=lambda e: self.delete_keyvalue_pair(config_key, original_key, row)
+        )
+
+        row = ft.Row([
+            key_field,
+            value_field,
+            delete_button
+        ], spacing=10, alignment=ft.MainAxisAlignment.START)
+
+        # 在创建时设置字段的引用，以便删除时能正确更新
+        row.data = {
+            'original_key': original_key,
+            'key_field': key_field,
+            'value_field': value_field
+        }
+
+        return row
+
+    def update_keyvalue_on_blur(self, config_key, original_key, new_key, value):
+        """当字段失去焦点时更新键值对"""
+        if config_key not in self.config_data:
+            self.config_data[config_key] = {}
+
+        # 如果原始键存在且与新键不同，删除原始键
+        if original_key and original_key != new_key and original_key in self.config_data[config_key]:
+            del self.config_data[config_key][original_key]
+
+        # 只有当键不为空时才设置新的键值对
+        if new_key.strip():
+            self.config_data[config_key][new_key] = value
+            # 更新该行的original_key引用
+            for row in self.keyvalue_containers[config_key].controls:
+                if hasattr(row, 'data') and row.data['original_key'] == original_key:
+                    row.data['original_key'] = new_key
+                    break
+
+    def add_keyvalue_pair(self, config_key):
+        """添加新的键值对"""
+        if config_key not in self.keyvalue_containers:
+            return
+
+        new_row = self.create_keyvalue_row(config_key, "", "")
+        self.keyvalue_containers[config_key].controls.append(new_row)
+        self.page.update()
+
+    def delete_keyvalue_pair(self, config_key, key, row):
+        """删除键值对"""
+        # 从配置数据中删除
+        if key and config_key in self.config_data and key in self.config_data[config_key]:
+            del self.config_data[config_key][key]
+
+        # 从UI容器中移除行
+        if config_key in self.keyvalue_containers:
+            container = self.keyvalue_containers[config_key]
+            if row in container.controls:
+                container.controls.remove(row)
+
+        self.page.update()
+        self.log_message(f"已删除键值对: {key}", "info")
 
     def update_config_value(self, key_path, value):
         """更新配置值"""
@@ -268,23 +444,55 @@ class RPAIntegrationUI:
 
     def _run_script_thread(self, script_name):
         """在线程中运行脚本"""
-        # 线程创建一个子进程subprocess
-        # 不异步运行ui就会卡住
         try:
+            # 设置环境变量强制使用UTF-8编码
+            env = os.environ.copy()
+            env['PYTHONIOENCODING'] = 'utf-8'
+
             self.current_process = subprocess.Popen(
                 [sys.executable, script_name],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
                 universal_newlines=True,
-                bufsize=1
+                bufsize=1,
+                encoding='utf-8',  # 明确指定编码
+                errors='replace',  # 遇到无法解码的字符时用替代字符替换
+                env=env  # 传递环境变量
             )
 
-            # 读取输出
-            for line in iter(self.current_process.stdout.readline, ''): # 直到返回空串
-                if line:
-                    self.log_message(f"[{self.current_script}] {line.strip()}", "info")
+            # 创建线程来分别处理stdout和stderr
+            def read_stdout():
+                try:
+                    for line in iter(self.current_process.stdout.readline, ''):
+                        if line.strip():  # 只处理非空行
+                            self.log_message(f"[{os.path.basename(self.current_script)}] {line.strip()}", "info")
+                except Exception as e:
+                    self.log_message(f"读取标准输出异常: {e}", "error")
 
+            def read_stderr():
+                try:
+                    for line in iter(self.current_process.stderr.readline, ''):
+                        if line.strip():  # 只处理非空行
+                            self.log_message(f"[{os.path.basename(self.current_script)}] {line.strip()}", "error")
+                except Exception as e:
+                    self.log_message(f"读取标准错误输出异常: {e}", "error")
+
+            # 启动读取线程
+            stdout_thread = threading.Thread(target=read_stdout)
+            stderr_thread = threading.Thread(target=read_stderr)
+            stdout_thread.daemon = True
+            stderr_thread.daemon = True
+
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # 等待进程结束
             self.current_process.wait()
+
+            # 等待读取线程结束
+            stdout_thread.join(timeout=1)
+            stderr_thread.join(timeout=1)
+
             if self.current_process.returncode == 0:
                 self.log_message(f"脚本 {script_name} 执行完成", "success")
             else:
@@ -305,7 +513,7 @@ class RPAIntegrationUI:
             except Exception as e:
                 self.log_message(f"停止脚本失败: {e}", "error")
         else:
-            self.log_message("没有正在运行的脚本", "info")
+            self.log_message("没有正在运行的脚本", "warning")
 
     def clear_log(self):
         """清空日志"""
@@ -602,14 +810,14 @@ class RPAIntegrationUI:
         """从文件加载历史日志"""
         self.history_log_type = log_type
         log_file = os.path.join(self.log_dir, f"{log_type}.log")
-        
+
         # 确保历史日志输出区域已初始化
         if not self.history_log_output:
             return
-        
+
         # 清空现有日志
         self.history_log_output.controls.clear()
-        
+
         # 检查文件是否存在
         if not os.path.exists(log_file):
             self.history_log_output.controls.append(
@@ -621,7 +829,7 @@ class RPAIntegrationUI:
         try:
             with open(log_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-            
+
             # 如果文件存在但为空
             if not lines:
                 self.history_log_output.controls.append(
@@ -642,13 +850,13 @@ class RPAIntegrationUI:
                             color = ft.colors.BLUE
                         else:
                             color = ft.colors.BLACK
-                        
+
                         self.history_log_output.controls.append(
                             ft.Text(line.strip(), color=color, size=12)
                         )
-            
+
             self.history_log_output.scroll_to(offset=-1)
-        
+
         except Exception as e:
             self.history_log_output.controls.append(
                 ft.Text(f"加载日志失败: {e}", color=ft.colors.RED)

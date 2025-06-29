@@ -10,104 +10,104 @@ from RpaTools import *
 class CenterServer:
     MAX_NETWORK_CONNECTIONS = 5
 
-    def __init__(self, host="0.0.0.0", port=55332):
+    def __init__(self, host="0.0.0.0", port=55339):
         self.host = host
         self.port = port
         self.clients = {}
         self.work_items = {}
-        self.superman_items = config.get_superman_items() # get from config
+        self.superman_items = config.get_superman_items()  # 从配置中获取
         self.web_thread = None
         self.web_lock = threading.Lock()
 
-    # start server
+    # 启动服务器
     def start_server(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((self.host, self.port))
         server_socket.listen(self.MAX_NETWORK_CONNECTIONS)
-        print(f"Server listening on {self.host}:{self.port}")
+        print(f"服务器监听中：{self.host}:{self.port}")
 
         self.web_thread = threading.Thread(target=self.web_control)
         self.web_thread.start()
 
         while True:
             client_socket, addr = server_socket.accept()
-            print(f"Accepted connection from {addr}")
+            print(f"接收到来自 {addr} 的连接")
 
             username = client_socket.recv(1024).decode().strip()
             self.clients[username] = client_socket
-            print(f"Client {username} connected")
+            print(f"客户端 {username} 已连接")
 
             threading.Thread(target=self.communicate_client, args=(username,)).start()
 
-    # web control thread
+    # Web 控制线程
     def web_control(self):
-        print(f"Web control thread start!")
+        print("Web 控制线程已启动")
 
         if not init_bpm_client():
-            print("Failed to authenticate with BPM platform")
+            print("BPM 平台认证失败")
             return
 
         need_sleep = False
         while True:
             if need_sleep:
-                time.sleep(60)
+                time.sleep(30)
             else:
                 time.sleep(2)
 
             need_sleep = True
             if validate_work_item(self.work_items, self.superman_items):
-                print(f"have work item -- {self.work_items}")
+                print(f"检测到待处理任务项 -- {self.work_items}")
 
-                # ui control lock
+                # UI 控制锁
                 with self.web_lock:
                     for key in self.work_items:
                         work_item_tuple = self.work_items[key]
                         if work_item_tuple[1] == 0:
                             task_id = work_item_tuple[0]
-                            print(f"processing work item -- {key}")
+                            print(f"开始处理任务项 -- {key}")
                             time.sleep(1)
 
                             rpa_data = get_work_item_data_superman(key)
                             rpa_data["taskId"] = task_id
-                            print(f"get RPA data -- {key} -- data: {rpa_data}")
+                            print(f"获取RPA数据 -- {key} -- 数据内容: {rpa_data}")
 
                             self.send_work_item(rpa_data)
                             self.work_items[key] = (task_id, 1)
 
                 need_sleep = False
             else:
-                print("no work item")
+                print("当前无任务项")
 
     def send_work_item(self, data):
         username = data["userName"]
         if username in self.clients:
             json_data = json.dumps(data)
             self.clients[username].sendall(json_data.encode("utf-8"))
-            print(f"Sent task {data['taskName']} to {username}")
+            print(f"已发送任务 {data['taskName']} 给用户 {username}")
         else:
-            print("User RPA is not exist!")
+            print("用户对应的RPA客户端不存在！")
 
-    # net communicate thread
+    # 网络通信线程
     def communicate_client(self, username):
-        print(f"Communicate with {username} thread start!")
+        print(f"与客户端 {username} 的通信线程已启动")
         client_socket = self.clients[username]
         while True:
             try:
                 json_data = client_socket.recv(1024).decode("utf-8")
                 data = json.loads(json_data)
                 if data["state"] == "completed":
-                    print(f"Task completion from {username}")
+                    print(f"收到来自 {username} 的任务完成通知")
                     self.click_complete_button(data)
                 else:
-                    print(f"Received unknow message from {username}: {data}")
+                    print(f"收到来自 {username} 的未知消息: {data}")
             except json.JSONDecodeError:
                 continue
             except ConnectionResetError:
-                print(f"Client {username} disconnected")
+                print(f"客户端 {username} 已断开连接")
                 del self.clients[username]
                 break
             except Exception as e:
-                print(f"Error communicating with {username}: {e}")
+                print(f"与客户端 {username} 通信时发生错误：{e}")
                 break
 
     def click_complete_button(self, data):
@@ -115,14 +115,14 @@ class CenterServer:
         if key not in self.work_items:
             return
 
-        # ui control lock
+        # UI 控制锁
         with self.web_lock:
             work_item_tuple = self.work_items[key]
             task_id = work_item_tuple[0]
 
             complete_task_by_id(task_id)
 
-        print(f"Finish work item -- {key}")
+        print(f"任务完成确认 -- {key}")
         del self.work_items[key]
 
 

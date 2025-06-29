@@ -2,9 +2,8 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional
-
 class ConfigLoader:
-    def __init__(self, config_path: str = "E:\\python_file\\rpa\\config.json"):
+    def __init__(self, config_path: str = "E:\\python_file\\2025\\rpa-integration\\config.json"):
         # 初始化
         self.config_path = Path(config_path)
         self._config = None
@@ -47,28 +46,6 @@ class ConfigLoader:
         """获取所有配置"""
         return self._config.copy() if self._config else {}
 
-    # === 路径配置 ===
-    def get_trigger_folder_path(self) -> str:
-        """获取触发文件夹路径"""
-        return self.get('paths.trigger_folder', 'D:\\WorkSpace\\Python\\rpa\\')
-
-    def get_rpa_filename_excel_path(self) -> str:
-        """获取RPA文件名Excel路径"""
-        return self.get('paths.rpa_filename_excel', 'D:\\WorkSpace\\Python\\rpa\\rpa_filename.xlsx')
-
-    # === Web配置 ===
-    def get_task_list_url(self) -> str:
-        """获取任务列表URL"""
-        return self.get('web.task_list_url', 'http://localhost:8080/tasklist')
-
-    def get_login_username(self) -> str:
-        """获取登录用户名"""
-        return self.get('web.login_username', 'demo')
-
-    def get_login_password(self) -> str:
-        """获取登录密码"""
-        return self.get('web.login_password', 'demo')
-
     # === 服务器配置 ===
     def get_server_host(self) -> str:
         """获取服务器主机地址"""
@@ -96,31 +73,29 @@ class ConfigLoader:
         """获取Superman项目配置"""
         return self.get('superman_items', {})
 
-    # === UI配置 ===
-    def get_api_url(self) -> str:
-        return self.get('api.base_url', self.get('ui.api_url', ''))
+    # === camunda7配置 ===
+    def get_camunda7_url(self) -> str:
+        return self.get('camunda7.base_url', '')
 
-    def get_username(self) -> str:
-        return self.get('api.username', self.get('ui.username', ''))
+    def get_camunda7_username(self) -> str:
+        return self.get('camunda7.username', '')
 
-    def get_api_key(self) -> str:
-        return self.get('api.password', self.get('ui.api_key', ''))
+    def get_camunda7_password(self) -> str:
+        return self.get('camunda7.password', '')
 
-    def get_api_platform(self) -> str:
-        return self.get('api.platform', 'camunda7')
+    def get_bpm_platform(self) -> str:
+        return self.get('camunda7.platform', 'camunda7')
 
-    def get_implicit_wait_time(self) -> int:
-        """获取隐式等待时间"""
-        return self.get('selenium.implicit_wait_time', 10)
+    # === camunda8配置 ===
 
-    def get_explicit_wait_time(self) -> int:
-        """获取显式等待时间"""
-        return self.get('selenium.explicit_wait_time', 20)
+    def get_camunda8_base_url(self) -> str:
+        return self.get('camunda8.base_url', '')
 
-    def get_poll_frequency(self) -> float:
-        """获取轮询频率"""
-        return self.get('selenium.poll_frequency', 0.5)
+    def get_camunda8_username(self) -> str:
+        return self.get('camunda8.username','')
 
+    def get_camunda8_password(self) -> str:
+        return self.get('camunda8.password', '')
     # === 时间配置 ===
     def get_sleep_interval(self) -> int:
         """获取睡眠间隔"""
@@ -133,6 +108,30 @@ class ConfigLoader:
     def get_rpa_check_interval(self) -> int:
         """获取RPA检查间隔"""
         return self.get('timing.rpa_check_interval', 2)
+
+    # === uipath调用 ===
+    def get_uipath_organization(self) -> str:
+        return self.get('uipath.organization', 'your-organization')
+
+    def get_uipath_tenant(self) -> str:
+        return self.get('uipath.tenant', 'DefaultTenant')
+
+    def get_uipath_pat(self) -> str:
+        return self.get('uipath.pat', 'your-personal-access-token')
+
+    def get_uipath_folder_id(self) -> int:
+        return self.get('uipath.folder_id', 0)
+
+    def get_uipath_robot_id(self) -> int:
+        return self.get('uipath.robot_id', 0)
+
+    def get_uipath_poll_interval(self) -> int:
+        """获取轮询间隔（秒）"""
+        return self.get('uipath.poll_interval', 5)
+
+    def get_uipath_max_attempts(self) -> int:
+        """获取最大轮询尝试次数"""
+        return self.get('uipath.max_attempts', 60)
 
     # === 配置更新方法 ===
     def update_config(self, key: str, value: Any) -> None:

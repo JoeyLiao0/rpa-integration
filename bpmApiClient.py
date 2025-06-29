@@ -1,5 +1,4 @@
 import requests
-import json
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from configLoader import config
@@ -8,11 +7,7 @@ from configLoader import config
 class BpmApiClient(ABC):
     """BPM API客户端基类"""
     def __init__(self):
-        self.base_url = config.get_api_url()
-        self.username = config.get_username()
-        self.api_key = config.get_api_key()
-        self.session = requests.Session()
-        self.authenticated = False
+        pass
 
     @abstractmethod
     def authenticate(self) -> bool:
@@ -37,11 +32,18 @@ class BpmApiClient(ABC):
 
 class Camunda7ApiClient(BpmApiClient):
     """Camunda 7 API客户端"""
+    def __init__(self):
+        super().__init__()
+        self.base_url = config.get_camunda7_url()
+        self.username = config.get_camunda7_username()
+        self.password = config.get_camunda7_password()
+        self.session = requests.Session()
+        self.authenticated = False
     def authenticate(self) -> bool:
         if not self.base_url or not self.username:
             return False
 
-        self.session.auth = (self.username, config.get_login_password())
+        self.session.auth = (self.username, config.get_camunda7_password())
         try:
             response = self.session.get(f"{self.base_url}/engine-rest/engine")
             self.authenticated = response.status_code == 200
@@ -122,132 +124,112 @@ class Camunda7ApiClient(BpmApiClient):
 
 
 class Camunda8ApiClient(BpmApiClient):
-    """Camunda 8 API客户端"""
+    """Camunda 8 本地 C8Run 环境，基于 Cookie 的认证"""
+
     def __init__(self):
-        super().__init__()
-        self.oauth_token = None
+        self.tasklist_url = config.get_camunda8_base_url()
+        self.username = config.get_camunda8_username()
+        self.password = config.get_camunda8_password()
+        self.session = requests.Session()
+        self.authenticated = False
 
     def authenticate(self) -> bool:
-        if not self.base_url or not self.api_key:
-            return False
-
         try:
-            auth_url = f"{self.base_url}/oauth/token"
-            payload = {
-                'grant_type': 'client_credentials',
-                'client_id': self.username,
-                'client_secret': self.api_key
+            login_url = f"{self.tasklist_url}/api/login"
+            params = {
+                "username": self.username,
+                "password": self.password
             }
-
-            response = requests.post(auth_url, data=payload)
-            if response.status_code == 200:
-                token_data = response.json()
-                self.oauth_token = token_data.get('access_token')
-                self.session.headers.update({
-                    'Authorization': f'Bearer {self.oauth_token}',
-                    'Content-Type': 'application/json'
-                })
+            resp = self.session.post(login_url, params=params)
+            if resp.status_code in [200, 204]:
                 self.authenticated = True
                 return True
-            return False
+            elif resp.status_code == 401:
+                print("Login failed: 401 Unauthorized - 用户名或密码错误")
+                self.authenticated = False
+                return False
+            else:
+                print(f"Login failed: {resp.status_code} {resp.text}")
+                self.authenticated = False
+                return False
         except Exception as e:
-            print(f"Authentication failed: {e}")
+            print(f"Login exception: {e}")
+            self.authenticated = False
             return False
 
     def get_task_list(self) -> List[Dict[str, Any]]:
-        if not self.authenticated:
+        if not self.authenticated and not self.authenticate():
             return []
-
         try:
-            query = {
-                "query": """
-                query GetTasks {
-                    tasks(query: {}) {
-                        id
-                        name
-                        taskDefinitionId
-                        processName
-                        assignee
-                        creationTime
-                        variables {
-                            name
-                            value
-                        }
-                    }
-                }
-                """
+            url = f"{self.tasklist_url}/v1/tasks/search"
+            # POST 空json表示搜索所有task 已完成的任务也会继续调用rpa
+            payload = {
+                "state": "CREATED"
             }
-
-            response = self.session.post(f"{self.base_url}/v1/graphql", json=query)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get('data', {}).get('tasks', [])
-            return []
+            resp = self.session.post(url, json=payload)
+            if resp.status_code == 200:
+                return resp.json()
+            else:
+                print(f"Get task list failed: {resp.status_code} {resp.text}")
+                return []
         except Exception as e:
-            print(f"Failed to get task list: {e}")
+            print(f"Get task list exception: {e}")
             return []
 
     def get_task_data(self, task_id: str) -> Dict[str, Any]:
-        if not self.authenticated:
+        if not self.authenticated and not self.authenticate():
             return {}
-
         try:
-            query = {
-                "query": f"""
-                query GetTask {{
-                    task(id: "{task_id}") {{
-                        id
-                        name
-                        taskDefinitionId
-                        processName
-                        assignee
-                        creationTime
-                        variables {{
-                            name
-                            value
-                        }}
-                    }}
-                }}
-                """
-            }
+            url = f"{self.tasklist_url}/v1/tasks/{task_id}"
+            resp = self.session.get(url)
+            if resp.status_code != 200:
+                print(f"Get task data failed: {resp.status_code} {resp.text}")
+                return {}
+            task_data = resp.json()
 
-            response = self.session.post(f"{self.base_url}/v1/graphql", json=query)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get('data', {}).get('task', {})
-            return {}
+            var_url = f"{self.tasklist_url}/v1/tasks/{task_id}/variables"
+            var_resp = self.session.get(var_url)
+            if var_resp.status_code == 200:
+                task_data["variables"] = var_resp.json()
+            return task_data
         except Exception as e:
-            print(f"Failed to get task data: {e}")
+            print(f"Get task data exception: {e}")
             return {}
 
     def complete_task(self, task_id: str, variables: Optional[Dict[str, Any]] = None) -> bool:
-        if not self.authenticated:
+        if not self.authenticated and not self.authenticate():
             return False
-
         try:
-            payload = {'taskId': task_id}
-            if variables:
-                payload['variables'] = variables
-
-            response = self.session.patch(f"{self.base_url}/v1/tasks/{task_id}/complete", json=payload)
-            return response.status_code == 204
+            url = f"{self.tasklist_url}/v1/tasks/{task_id}/complete"
+            payload = {"variables": variables} if variables else {}
+            resp = self.session.patch(url, json=payload)
+            if resp.status_code in [200, 204]:
+                return True
+            else:
+                print(f"Complete task failed: {resp.status_code} {resp.text}")
+                return False
         except Exception as e:
-            print(f"Failed to complete task: {e}")
+            print(f"Complete task exception: {e}")
             return False
 
     def start_process(self, process_key: str, variables: Optional[Dict[str, Any]] = None) -> bool:
-        if not self.authenticated:
+        if not self.authenticated and not self.authenticate():
             return False
-
         try:
-            payload = {'bpmnProcessId': process_key}
+            url = f"{self.tasklist_url}/v1/process-instances"
+            payload = {
+                "bpmnProcessId": process_key,
+            }
             if variables:
-                payload['variables'] = variables
-
-            response = self.session.post(f"{self.base_url}/v1/process-instances", json=payload)
-            return response.status_code == 200
+                payload["variables"] = variables
+            resp = self.session.post(url, json=payload)
+            if resp.status_code in [200, 201]:
+                return True
+            else:
+                print(f"Start process failed: {resp.status_code} {resp.text}")
+                return False
         except Exception as e:
-            print(f"Failed to start process: {e}")
+            print(f"Start process exception: {e}")
             return False
 
 
